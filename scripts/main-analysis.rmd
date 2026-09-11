@@ -1,0 +1,191 @@
+---
+title: "practice analysis"
+author: "ailani"
+date: "9/7/26"
+output: html_document
+---
+
+Load packages
+```{r, warning = FALSE, message = FALSE}
+
+#list of packages (Diveica et al., 2025)
+packages <- c("tidyverse", "bootnet", "NetworkComparisonTest", "qgraph", "igraph", "papaja", "ggcorrplot", "rstatix", "psych", "ggrepel", "ggExtra")
+
+#load each package
+for (pkg in packages) {
+  library(pkg, character.only = TRUE, quietly=TRUE)
+}
+
+# notin operator (Diveica et al, 2025)
+'%notin%' <- negate('%in%')
+```
+
+R environment, version info for reproducibility 
+```{r session-info, include=TRUE}
+sessionInfo() 
+```
+
+Load datasets 
+``` {r datasets}
+setwd('/Users/ailani/Projects/iconic-network/data/')
+
+AOA <- read_csv('kuperman_2012_AOA.csv')
+freq <- read_csv('brysbaert_2012_SUBTLEX_POS.csv')
+lanc <- read_csv('Lancaster_sensorimotor_norms_for_39707_words.csv')
+spec <- read_csv('muraki_2026_specificity.csv')
+emot <- read_csv('warriner_2013_affective_norms.csv')
+icon <- read_csv("winter_2024_iconicity_ratings_cleaned.csv")
+
+```
+
+
+Select relevant columns from each dataset
+```{r}
+AOA <- AOA %>% select(Word, Rating.Mean) %>% 
+  rename(AOA = Rating.Mean)
+
+freq <- freq %>% 
+  rename(Frequency = FREQcount) %>% 
+  select(Word, Frequency)
+
+lanc <- lanc %>% select(Word, Auditory.mean:Torso.mean) %>% 
+  mutate(Word = tolower(Word)) %>%
+  rename_with(~ str_remove(.x, "\\.mean"), Auditory.mean:Torso.mean)
+
+spec <- spec %>% select(Word, Value) %>%  
+  rename(Specificity = Value) #make sure if Value is the right column to use
+
+emot <- emot %>% select(Word, A.Mean.Sum, V.Mean.Sum) %>% 
+  mutate(Valence = abs(V.Mean.Sum - 5)) %>% # Get the valence extremity value
+  rename(Arousal = A.Mean.Sum) %>% 
+  select(Word, Arousal, Valence)
+
+
+icon <- icon %>% select(word, rating)  %>% #make sure if rating is right column 
+  rename(Word = word) %>% 
+  rename(Iconicity = rating)
+```
+
+
+Join to full dataset 
+```{r}
+df <- reduce(list(AOA, lanc, spec, emot, icon, freq), inner_join, by = "Word")
+```
+
+See how many words overlapped
+```{r}
+nrow(df)
+```
+
+There are `r nrow(df)` overlapping words across all the data sets representing the properties of interest.  
+
+Log-transform frequency data
+```{r}
+# First make sure NAs in Frequency are 0 
+df <- mutate(df, 
+  Frequency = ifelse(is.na(Frequency), 0, Frequency))
+
+df <- mutate(df, 
+      LogFreq = log10(Frequency + 1))
+```
+
+Standardize variables (Z-scores)
+```{r}
+z_score <- function(x) (x - mean(x, na.rm = TRUE)) / sd(x)
+df <- df %>% mutate(across(c(AOA, Auditory:Torso, Specificity, Arousal, Valence, LogFreq), z_score, .names = "{.col}_z"))
+```
+
+
+Split into two data frames: one with high iconicity words and another with low iconicity (more arbitrary) words. For lack of conventions in iconicity literature, use tertile split.
+```{r}
+# Find the tertile cutoffs on iconicity ratings 
+tertiles <- quantile(df$Iconicity, probs= c(1/3, 2/3), na.rm=TRUE)
+cut_low <- tertiles[1]
+cut_high <- tertiles[2]
+
+# Split into high-iconicity and low-iconicity word groups 
+high_iconic <- df %>% filter(Iconicity >= cut_high)
+low_iconic <- df %>% filter(Iconicity <= cut_low)
+```
+
+Check group size 
+```{r}
+nrow(high_iconic)
+nrow(low_iconic)
+```
+
+There are more high_iconic words (`{r} nrow(high_iconic)`) than low_iconic (`{r} nrow(low_iconic)`), so match to low_iconic 
+```{r}
+n_match <- min(nrow(high_iconic), nrow(low_iconic))
+
+high_iconic <- high_iconic %>% 
+  arrange(desc(Iconicity)) %>% 
+  slice_head(n=n_match) %>%
+  mutate(Iconic = "Iconic")
+
+low_iconic <- low_iconic %>% 
+  arrange(Iconicity) %>% 
+  slice_head(n=n_match) %>%
+  mutate(Iconic = "Non-iconic")
+```
+
+Check if the rows of the split data sets are equal, along with their respective means and ranges 
+```{r}
+# Check  
+nrow(high_iconic) == nrow(low_iconic)
+mean(high_iconic$Iconicity); range(high_iconic$Iconicity)
+mean(low_iconic$Iconicity);  range(low_iconic$Iconicity)
+```
+
+Now, both high iconic group and low iconic group have same number of words, `{r} nrows(high_iconic)`.
+
+The mean iconicity of the high_iconic set is `{r} mean(high_iconic$Iconicity)` and the range is `{r} range(high_iconic$Iconicity)` 
+
+The mean iconicity of the low_iconic set is `{r} mean(low_iconic$Iconicity)` and the range is `{r} range(low_iconic$Iconicity)` .
+
+Combine the split data sets into one (removing the middle iconicity words)
+ ```{r}
+data_both <- bind_rows(high_iconic, low_iconic) %>%
+  select(Word, Iconic, everything()) %>%
+  mutate(Iconic = factor(Iconic, levels = c("Iconic", "Non-iconic")))
+```
+
+Univariate group comparison of semantic dimensions between high iconic vs low iconic words (`broom` package)
+```{r}
+# t-tests to compare ratings between high-iconic vs low-iconic 
+
+# list of variables
+vars_test <- c("AOA", "Auditory", "Gustatory","Haptic", "Interoceptive", "Olfactory", "Visual", "Foot_leg", "Hand_arm", "Head", "Mouth", "Torso", "Specificity", "Arousal", "Valence")
+
+results <- map_dfr(vars_test, function(var) {
+  formula <- as.formula(paste(var,"~ Iconic"))
+  t_result <- t.test(formula, data=data_both)
+
+  tidy(t_result) %>%
+    mutate(Variable = var) %>% 
+    select(Variable, estimate, statistic, p.value, conf.low, conf.high)
+})
+```
+
+Adjust for multiple comparisons with Bonferroni correction (following Diveica et al., 2025)
+```{r}
+results <- results %>% 
+  mutate(p_adj = p.adjust(p.value, method="bonferroni")) %>%
+  arrange(p_adj)
+
+print(results)
+```
+
+Calculate the effect sizes (Cohen's d) 
+```{r}
+effect_sizes <- map_dfr(vars_test, function(var){
+  formula <- as.formula(paste(var, "~ Iconic"))
+  d <- cohens_d(formula, data=data_both)
+  tibble(Variable = var, effsize= d$effsize, magnitude = d$magnitude)
+})
+
+results <- results %>%
+  left_join(effect_sizes, by = "Variable")
+
+print(results)
+```
