@@ -27,7 +27,7 @@ sessionInfo()
 
 Load datasets 
 ``` {r datasets}
-setwd('/Users/ailani/Projects/iconic-network/data/')
+setwd('/Users/ailani/Projects/iconic-network-analysis/data/')
 
 AOA <- read_csv('kuperman_2012_AOA.csv')
 freq <- read_csv('brysbaert_2012_SUBTLEX_POS.csv')
@@ -153,7 +153,6 @@ data_both <- bind_rows(high_iconic, low_iconic) %>%
 Univariate group comparison of semantic dimensions between high iconic vs low iconic words (`broom` package)
 ```{r}
 # t-tests to compare ratings between high-iconic vs low-iconic 
-
 # list of variables
 vars_test <- c("AOA", "Auditory", "Gustatory","Haptic", "Interoceptive", "Olfactory", "Visual", "Foot_leg", "Hand_arm", "Head", "Mouth", "Torso", "Specificity", "Arousal", "Valence")
 
@@ -188,4 +187,22 @@ results <- results %>%
   left_join(effect_sizes, by = "Variable")
 
 print(results)
+```
+
+Visualize the differences with violin plots
+```{r}
+# Reshape data to long format
+both_long <- data_both %>% 
+  select(Iconic, all_of(vars_test)) %>%
+  pivot_longer(-Iconic, names_to = "Variable", values_to = "Value")
+
+# Build plot 
+ggplot(both_long, 
+    aes(x = Iconic, y = Value, fill= Iconic)) +
+    geom_violin(alpha=0.5) +
+    geom_boxplot(width=0.15, outlier.shape = NA) +
+    facet_wrap(~ Variable, scales= "free_y") +
+    theme_minimal()
+
+
 ```
