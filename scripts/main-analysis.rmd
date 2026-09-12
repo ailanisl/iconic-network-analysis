@@ -133,8 +133,9 @@ Check if the rows of the split data sets are equal, along with their respective 
 ```{r}
 # Check  
 nrow(high_iconic) == nrow(low_iconic)
-mean(high_iconic$Iconicity); range(high_iconic$Iconicity)
-mean(low_iconic$Iconicity);  range(low_iconic$Iconicity)
+mean(high_iconic$Iconicity); range(high_iconic$Iconicity); sd(high_iconic$Iconicity)
+mean(low_iconic$Iconicity);  range(low_iconic$Iconicity); 
+sd(low_iconic$Iconicity)
 ```
 
 Now, both high iconic group and low iconic group have same number of words, `{r} nrows(high_iconic)`.
