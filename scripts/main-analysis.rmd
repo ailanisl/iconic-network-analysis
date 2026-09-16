@@ -61,9 +61,8 @@ emot <- emot %>% select(Word, A.Mean.Sum, V.Mean.Sum) %>%
   select(Word, Arousal, Valence)
 
 
-icon <- icon %>% select(word, rating)  %>% #make sure if rating is right column 
-  rename(Word = word) %>% 
-  rename(Iconicity = rating)
+icon <- icon %>% select(word, rating, rating_sd)  %>% #make sure if rating is right column 
+  rename(Word = word, Iconicity = rating, Iconicity_SD = rating_sd) 
 ```
 
 
@@ -134,8 +133,17 @@ Check if the rows of the split data sets are equal, along with their respective 
 # Check  
 nrow(high_iconic) == nrow(low_iconic)
 mean(high_iconic$Iconicity); range(high_iconic$Iconicity); sd(high_iconic$Iconicity)
+
 mean(low_iconic$Iconicity);  range(low_iconic$Iconicity); 
 sd(low_iconic$Iconicity)
+```
+
+Also get the mean of the SDs (inter-rater variability) for each group
+``` {r}
+high_iconic %>% summarise(mean_sd = mean(Iconicity_SD, na.rm=TRUE))
+low_iconic %>% summarise(mean_sd = mean(Iconicity_SD, na.rm=TRUE))
+
+df %>% summarise(mean_SD_full = mean(Iconicity_SD, na.rm=TRUE))
 ```
 
 Now, both high iconic group and low iconic group have same number of words, `{r} nrows(high_iconic)`.
@@ -143,6 +151,17 @@ Now, both high iconic group and low iconic group have same number of words, `{r}
 The mean iconicity of the high_iconic set is `{r} mean(high_iconic$Iconicity)` and the range is `{r} range(high_iconic$Iconicity)` 
 
 The mean iconicity of the low_iconic set is `{r} mean(low_iconic$Iconicity)` and the range is `{r} range(low_iconic$Iconicity)` .
+
+Mean inter-rater SD was 1.78 (High) and 1.74 (Low). These are both slightly lower than full-sample mean SD of 1.81. 
+```{r}
+t.test(df$Iconicity_SD, mu = 1.775)  # 1.775 = combined High/Low mean, adjust as needed
+
+middle_icon_words <- df %>% 
+  filter(Iconicity > cut_low, Iconicity < cut_high)
+
+mean(middle_icon_words$Iconicity_SD, na.rm = TRUE)
+```
+
 
 Combine the split data sets into one (removing the middle iconicity words)
  ```{r}
@@ -206,4 +225,58 @@ ggplot(both_long,
     theme_minimal()
 
 
+```
+
+
+Correlation martix for full data set 
+``` {r}
+library(dplyr)
+cor_data <- df %>%
+  select(all_of(vars_test), Iconicity)
+
+cor_matrix <- cor(cor_data, use="pairwise.complete.obs", method = "pearson")
+print(round(cor_matrix,2))
+
+# get p-values for correlations 
+library(Hmisc)
+
+rcorr_result <- rcorr(as.matrix(cor_data), type = "pearson")
+
+rcorr_result$r  # correlation coefficients
+rcorr_result$P  # p-values
+
+# Visualize
+library(corrplot)
+corrplot(cor_matrix, 
+         method = "color",
+         type = "upper",
+         #order = "hclust",
+         p.mat = rcorr_result$P,
+         sig.level = 0.05,
+         insig = "blank",       # blank out non-significant cells
+         addCoef.col = "black",
+         number.cex = 0.6,
+         tl.col = "black",
+         title = "Full",
+         tl.srt = 45,
+         diag = FALSE)
+```
+
+Separate correlation matrices for high vs low iconic groups 
+``` {r} 
+cor_hi_data <- high_iconic %>%
+  select(all_of(vars_test), Iconicity)
+cor_low_data <- low_iconic %>%
+  select(all_of(vars_test), Iconicity)
+
+cor_high <- cor(cor_hi_data, use = "pairwise.complete.obs")
+cor_low  <- cor(cor_low_data,  use = "pairwise.complete.obs")
+
+corrplot(cor_high, method = "color", type = "upper", addCoef.col = "black", 
+         number.cex = 0.5, tl.col = "black", tl.srt = 45, diag = FALSE,
+         title = "High iconicity", mar = c(0,0,2,0))
+
+corrplot(cor_low, method = "color", type = "upper", addCoef.col = "black", 
+         number.cex = 0.5, tl.col = "black", tl.srt = 45, diag = FALSE,
+         title = "Low iconicity", mar = c(0,0,2,0))
 ```
