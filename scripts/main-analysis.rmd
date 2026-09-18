@@ -1,9 +1,10 @@
 ---
-title: "practice analysis"
+title: "main analysis"
 author: "ailani"
 date: "9/7/26"
 output: html_document
 ---
+# The Multisensory Nature of Iconic Words: A Network Analysis
 
 Load packages
 ```{r, warning = FALSE, message = FALSE}
@@ -89,10 +90,10 @@ df <- mutate(df,
 ```
 
 Standardize variables (Z-scores)
-```{r}
+`{r}
 z_score <- function(x) (x - mean(x, na.rm = TRUE)) / sd(x)
 df <- df %>% mutate(across(c(AOA, Auditory:Torso, Specificity, Arousal, Valence, LogFreq), z_score, .names = "{.col}_z"))
-```
+`
 
 
 Split into two data frames: one with high iconicity words and another with low iconicity (more arbitrary) words. For lack of conventions in iconicity literature, use tertile split.
@@ -280,3 +281,41 @@ corrplot(cor_low, method = "color", type = "upper", addCoef.col = "black",
          number.cex = 0.5, tl.col = "black", tl.srt = 45, diag = FALSE,
          title = "Low iconicity", mar = c(0,0,2,0))
 ```
+
+# Independent Networks 
+
+Estimate the partial correlation networks. 
+``` {r}
+# Create plots; extract centrality metrics 
+net_plots <- list()
+centrality_tbls <- list()
+centrality_plots <- list()
+corr_plots <- list() 
+```
+
+Iterate over each iconicity level 
+``` {r}
+for (iconic_label in c("Iconic", "Non-iconic")) {
+  # Prepare data 
+  dat < data_both %>% 
+    # removing Word, Iconicity columns 
+    dplyr::filter(Iconic == iconic_label) |> 
+    dplyr::select(-Word, -Iconic, -Iconicity)
+  #load thresholded partial correlation network 
+  net <- nets[[iconic_label]]
+
+  # Network plot 
+  names <- names(dat)
+  # plot partial correlations as network 
+  net_plot <- qgraph::qgraph(net$graph,
+    labels= names,
+    label.scale.equal= TRUE,
+    label.cex = 3.15, label.font = 2,
+    title = paste0(iconic_label),
+    title.cex = 2.5)
+
+}
+```
+
+
+
