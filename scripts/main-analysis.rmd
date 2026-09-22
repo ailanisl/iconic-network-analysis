@@ -286,18 +286,21 @@ corrplot(cor_low, method = "color", type = "upper", addCoef.col = "black",
 
 Estimate the partial correlation networks. 
 
+Select rows that will be used as nodes (remove Word, Iconic, Iconicity, Iconicity_SD, Frequency, and LogFrequency) from high_iconic and low_iconic data frames. 
 ```{r}
 nrow(high_iconic) == nrow(low_iconic)
 
 high_iconic <- high_iconic %>% 
-  select(-Word, -Iconic, -Iconicity, -Iconicity_SD, -Freq, -LogFreq)
+  select(-Word, -Iconic, -Iconicity, -Iconicity_SD, -Frequency, -LogFreq)
 
 low_iconic <- low_iconic %>% 
-  select(-Word, -Iconic, -Iconicity, -Iconicity_SD, -Freq, -LogFreq)
+  select(-Word, -Iconic, -Iconicity, -Iconicity_SD, -Frequency, -LogFreq)
 
+# variable to store label names of nodes
 names <- as.list(names(low_iconic))
 ```
 
+Estimate network for each group, using `bootnet` package. 
 ```{r}
 net_high <- estimateNetwork(high_iconic,
   default = "EBICglasso", 
@@ -316,6 +319,45 @@ plot(net_high, layout = L,label.scale = FALSE, title = "High Iconicity Network")
 
 ```
 
+Create partial correlation plot
+```{r}
+pcor_high <- net_high$graph
+pcor_low <- net_low$graph
+
+# add column and row names 
+colnames(pcor_high) <- rownames(pcor_high) <- colnames(high_iconic)
+colnames(pcor_low)  <- rownames(pcor_low)  <- colnames(low_iconic)
+
+
+corrplot(
+  pcor_low,
+  method = "color",
+  type="upper",
+  legend.title = "Partial Corr",
+  diag = FALSE,
+  tl.srt = 45,
+  tl.col = "black",
+  title = "Low Iconicity: Partial Correlations",
+  mar = c(0,0,2,0)
+)
+
+corrplot(
+  pcor_high,
+  method = "color",
+  type="upper",
+  legend.title = "Partial Corr",
+  diag = FALSE,
+  tl.srt = 45,
+  tl.col = "black",
+  title = "High Iconicity: Partial Correlations",
+  mar = c(0,0,2,0)
+)
+
+```
+
+Create centrality figure 
+ 
+
 ``` {r}
 # initialize vars
 nets <- list()
@@ -324,45 +366,4 @@ centrality_tbls <- list()
 centrality_plots <- list()
 corr_plots <- list() 
 ```
-
-Iterate over each iconicity level 
-``` {r}
-for (iconic_label in c("Iconic", "Non-iconic")) {
-  # Prepare data 
-  dat <- data_both %>% 
-    # removing Word, Iconicity columns 
-    dplyr::filter(Iconic == iconic_label) %>%
-    dplyr::select(-Word, -Iconic, -Iconicity)
-  #load thresholded partial correlation network 
-  net <- nets[[iconic_label]]
-
-  # Network plot 
-  names <- names(dat)
-  # plot partial correlations as network 
-  net_plot <- qgraph::qgraph(net$graph,
-    labels= names,
-    label.scale.equal= TRUE,
-    label.cex = 3.15, label.font = 2,
-    title = paste0(iconic_label),
-    title.cex = 2.5,
-    borders= FALSE)
-
-  # Partial correlations plotted as corrplot 
-  cor_plot <- ggcorrplot::ggcorrplot(
-    net[["graph"]],
-    type= "lower",
-    legend.title = "Partial Corr",
-    show.diag = TRUE,
-    lab = TRUE,
-    hc.order = FALSE
-  )
-
-  net_plots[[iconic_label]] <- net_plot
-  corr_plots[[iconic_label]] <- cor_plot
-
-  rm(net, net_plot, cor_plot)
-}
-```
-
-
 
