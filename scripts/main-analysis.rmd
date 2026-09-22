@@ -285,8 +285,40 @@ corrplot(cor_low, method = "color", type = "upper", addCoef.col = "black",
 # Independent Networks 
 
 Estimate the partial correlation networks. 
+
+```{r}
+nrow(high_iconic) == nrow(low_iconic)
+
+high_iconic <- high_iconic %>% 
+  select(-Word, -Iconic, -Iconicity, -Iconicity_SD, -Freq, -LogFreq)
+
+low_iconic <- low_iconic %>% 
+  select(-Word, -Iconic, -Iconicity, -Iconicity_SD, -Freq, -LogFreq)
+
+names <- as.list(names(low_iconic))
+```
+
+```{r}
+net_high <- estimateNetwork(high_iconic,
+  default = "EBICglasso", 
+  corMethod = "cor_auto",
+  tuning = 0.5)
+
+net_low <- estimateNetwork(low_iconic,
+  default = "EBICglasso", 
+  corMethod = "cor_auto",
+  tuning = 0.5)
+
+L <- averageLayout(net_low,net_high)
+
+plot(net_low, layout=L,label.scale = FALSE, title = "Low Iconicity Network")
+plot(net_high, layout = L,label.scale = FALSE, title = "High Iconicity Network")
+
+```
+
 ``` {r}
-# Create plots; extract centrality metrics 
+# initialize vars
+nets <- list()
 net_plots <- list()
 centrality_tbls <- list()
 centrality_plots <- list()
@@ -297,9 +329,9 @@ Iterate over each iconicity level
 ``` {r}
 for (iconic_label in c("Iconic", "Non-iconic")) {
   # Prepare data 
-  dat < data_both %>% 
+  dat <- data_both %>% 
     # removing Word, Iconicity columns 
-    dplyr::filter(Iconic == iconic_label) |> 
+    dplyr::filter(Iconic == iconic_label) %>%
     dplyr::select(-Word, -Iconic, -Iconicity)
   #load thresholded partial correlation network 
   net <- nets[[iconic_label]]
@@ -312,8 +344,23 @@ for (iconic_label in c("Iconic", "Non-iconic")) {
     label.scale.equal= TRUE,
     label.cex = 3.15, label.font = 2,
     title = paste0(iconic_label),
-    title.cex = 2.5)
+    title.cex = 2.5,
+    borders= FALSE)
 
+  # Partial correlations plotted as corrplot 
+  cor_plot <- ggcorrplot::ggcorrplot(
+    net[["graph"]],
+    type= "lower",
+    legend.title = "Partial Corr",
+    show.diag = TRUE,
+    lab = TRUE,
+    hc.order = FALSE
+  )
+
+  net_plots[[iconic_label]] <- net_plot
+  corr_plots[[iconic_label]] <- cor_plot
+
+  rm(net, net_plot, cor_plot)
 }
 ```
 
