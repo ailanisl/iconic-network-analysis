@@ -284,7 +284,7 @@ corrplot(cor_low, method = "color", type = "upper", addCoef.col = "black",
 
 # Independent Networks 
 
-Estimate the partial correlation networks. 
+## Estimate the partial correlation networks. 
 
 Select rows that will be used as nodes (remove Word, Iconic, Iconicity, Iconicity_SD, Frequency, and LogFrequency) from high_iconic and low_iconic data frames. 
 ```{r}
@@ -329,23 +329,10 @@ colnames(pcor_high) <- rownames(pcor_high) <- colnames(high_iconic)
 colnames(pcor_low)  <- rownames(pcor_low)  <- colnames(low_iconic)
 
 
-corrplot(
-  pcor_low,
-  method = "color",
-  type="upper",
-  legend.title = "Partial Corr",
-  diag = FALSE,
-  tl.srt = 45,
-  tl.col = "black",
-  title = "Low Iconicity: Partial Correlations",
-  mar = c(0,0,2,0)
-)
-
-corrplot(
+matrix1 <- corrplot(
   pcor_high,
   method = "color",
   type="upper",
-  legend.title = "Partial Corr",
   diag = FALSE,
   tl.srt = 45,
   tl.col = "black",
@@ -353,11 +340,79 @@ corrplot(
   mar = c(0,0,2,0)
 )
 
+matrix2 <- corrplot(
+  pcor_low,
+  method = "color",
+  type="upper",
+  diag = FALSE,
+  tl.srt = 45,
+  tl.col = "black",
+  title = "Low Iconicity: Partial Correlations",
+  mar = c(0,0,2,0)
+)
+
+# Combine the partial correlation plots into one [COME BACK LATER]
+combined_matrix <- pcor_high # Use high_iconic as base 
+combined_matrix[upper.tri(combined_matrix)] <- pcor_low[upper.tri(pcor_low)] #fill upper with low_iconic corrplot 
+
+pc_corrplot <- ggcorrplot(
+  combined_matrix, # combined partial correlation plot
+  type = "full",
+  legend.title = "Partial r", 
+  show.diag = TRUE,
+  outline.col = "white",
+  lab = TRUE, # display correlation coef 
+  hc.order = FALSE
+)
+pc_corrplot
+```
+
+Summary of network for high_iconic 
+```{r}
+summary(pcor_high)
+corrplot(
+  pcor_high,
+  method = "color",
+  type="upper",
+  diag = FALSE,
+  tl.srt = 45,
+  tl.col = "black",
+  title = "High Iconicity: Partial Correlations",
+  mar = c(0,0,2,0)
+)
 ```
 
 Create centrality figure 
- 
+```{r}
+centralityPlot(list(High = net_high, Low = net_low), include = c("Strength"), decreasing = FALSE, orderBy = "Strength")
 
+centrality_table <- centralityTable(net_high, net_low, standardized = TRUE)
+centrality_table %>% 
+  filter(measure == "Strength") %>% 
+  arrange(desc(value))
+```
+
+Bootstrap Stability
+
+```{r}
+boot_high <- bootnet(net_high, nBoots = 1000, type = "nonparametric")
+boot_low  <- bootnet(net_low,  nBoots = 1000, type = "nonparametric")
+``` 
+
+```{r}
+# node strength stability
+case_high <- bootnet(net_high, nBoots = 1000, type = "case", statistics = "strength")
+case_low  <- bootnet(net_low,  nBoots = 1000, type = "case", statistics = "strength")
+```
+
+```{r}
+# compare networks directly
+nct_result <- NCT(high_iconic, low_iconic, it = 10000, 
+                   test.edges = TRUE, edges = "all", 
+                   test.centrality = TRUE, centrality = "strength",
+                   p.adjust.methods = "BH")
+summary(nct_result)
+```
 ``` {r}
 # initialize vars
 nets <- list()
