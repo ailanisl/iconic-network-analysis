@@ -8,7 +8,12 @@ output: html_document
 
 Load packages
 ```{r, warning = FALSE, message = FALSE}
-
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,   # hide warnings
+  message = FALSE,   # hide messages 
+  error = FALSE      # hide errors
+)
 #list of packages (Diveica et al., 2025)
 packages <- c("tidyverse", "bootnet", "NetworkComparisonTest", "qgraph", "igraph", "papaja", "ggcorrplot", "rstatix", "psych", "ggrepel", "ggExtra")
 
@@ -147,13 +152,14 @@ low_iconic %>% summarise(mean_sd = mean(Iconicity_SD, na.rm=TRUE))
 df %>% summarise(mean_SD_full = mean(Iconicity_SD, na.rm=TRUE))
 ```
 
-Now, both high iconic group and low iconic group have same number of words, `{r} nrows(high_iconic)`.
+Now, both high iconic group and low iconic group have same number of words: 2227.
 
-The mean iconicity of the high_iconic set is `{r} mean(high_iconic$Iconicity)` and the range is `{r} range(high_iconic$Iconicity)` 
+The mean iconicity of the high_iconic set is 4.75, SD = 0.52, and the range is 4.10-6.91. 
 
-The mean iconicity of the low_iconic set is `{r} mean(low_iconic$Iconicity)` and the range is `{r} range(low_iconic$Iconicity)` .
+The mean iconicity of the low_iconic set is 2.89, SD = 0.36, and the range is 1.30 - 3.89.
 
 Mean inter-rater SD was 1.78 (High) and 1.74 (Low). These are both slightly lower than full-sample mean SD of 1.81. 
+
 ```{r}
 t.test(df$Iconicity_SD, mu = 1.775)  # 1.775 = combined High/Low mean, adjust as needed
 
@@ -370,16 +376,11 @@ pc_corrplot
 Summary of network for high_iconic 
 ```{r}
 summary(pcor_high)
-corrplot(
-  pcor_high,
-  method = "color",
-  type="upper",
-  diag = FALSE,
-  tl.srt = 45,
-  tl.col = "black",
-  title = "High Iconicity: Partial Correlations",
-  mar = c(0,0,2,0)
-)
+```
+
+Summary of network for low_iconic
+```{r}
+summary(pcor_low)
 ```
 
 Create centrality figure 
@@ -393,7 +394,6 @@ centrality_table %>%
 ```
 
 Bootstrap Stability
-
 ```{r}
 boot_high <- bootnet(net_high, nBoots = 1000, type = "nonparametric")
 boot_low  <- bootnet(net_low,  nBoots = 1000, type = "nonparametric")
@@ -411,14 +411,5 @@ nct_result <- NCT(high_iconic, low_iconic, it = 10000,
                    test.edges = TRUE, edges = "all", 
                    test.centrality = TRUE, centrality = "strength",
                    p.adjust.methods = "BH")
-summary(nct_result)
-```
-``` {r}
-# initialize vars
-nets <- list()
-net_plots <- list()
-centrality_tbls <- list()
-centrality_plots <- list()
-corr_plots <- list() 
 ```
 
