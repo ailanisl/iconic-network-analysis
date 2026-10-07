@@ -165,7 +165,7 @@ mean(middle_icon_words$Iconicity_SD, na.rm = TRUE)
 
 
 Combine the split data sets into one (removing the middle iconicity words)
- ```{r}
+```{r}
 data_both <- bind_rows(high_iconic, low_iconic) %>%
   select(Word, Iconic, everything()) %>%
   mutate(Iconic = factor(Iconic, levels = c("Iconic", "Non-iconic")))
