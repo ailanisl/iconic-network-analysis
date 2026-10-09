@@ -395,8 +395,12 @@ centrality_table %>%
 
 Bootstrap Stability
 ```{r}
+#| echo = FALSE
 boot_high <- bootnet(net_high, nBoots = 1000, type = "nonparametric")
 boot_low  <- bootnet(net_low,  nBoots = 1000, type = "nonparametric")
+
+boot_high
+boot_low
 ``` 
 
 ```{r}
