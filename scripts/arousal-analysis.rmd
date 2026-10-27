@@ -1,0 +1,216 @@
+
+```{r, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,   # hide warnings
+  message = FALSE,   # hide messages 
+  error = FALSE      # hide errors
+)
+#list of packages (Diveica et al., 2025)
+packages <- c("tidyverse", "bootnet", "NetworkComparisonTest", "qgraph", "igraph", "papaja", "ggcorrplot", "rstatix", "psych", "ggrepel", "ggExtra")
+
+#load each package
+for (pkg in packages) {
+  library(pkg, character.only = TRUE, quietly=TRUE)
+}
+
+# notin operator (Diveica et al, 2025)
+'%notin%' <- negate('%in%')
+```
+
+
+R environment, version info for reproducibility 
+```{r session-info, include=TRUE}
+sessionInfo() 
+```
+
+Load datasets 
+``` {r datasets}
+setwd('/Users/ailani/Projects/iconic-network-analysis/data/')
+
+AOA <- read_csv('kuperman_2012_AOA.csv')
+freq <- read_csv('brysbaert_2012_SUBTLEX_POS.csv')
+lanc <- read_csv('Lancaster_sensorimotor_norms_for_39707_words.csv')
+spec <- read_csv('muraki_2026_specificity.csv')
+emot <- read_csv('warriner_2013_affective_norms.csv')
+icon <- read_csv("winter_2024_iconicity_ratings_cleaned.csv")
+
+sidhu <- read_csv('sidhu_2026_exp2_recall.csv')
+sidhu_words <- read_csv('sidhu_2026_candidate_words.csv')
+
+```
+
+Select relevant columns from lancaster dataset
+```{r}
+lanc <- lanc %>% select(Word, Auditory.mean:Torso.mean) %>% 
+  mutate(Word = tolower(Word)) %>%
+  rename_with(~ str_remove(.x, "\\.mean"), Auditory.mean:Torso.mean)  
+```
+
+Rerun Sidhu's candidate word dataset to get the sound arousal **coefficient**
+
+```{r}
+library(data.table)
+
+d <- as.data.table(read.csv("sidhu_2026_candidate_words.csv"))
+
+#make all entries for IPA binary numeric
+preds <- colnames(d[,4:59]) # cols 4 - 59 are the IPA alphabet for each word, coded 1 (present) or 0 (absent)
+d <- d[,(preds) := lapply(.SD, as.numeric), .SDcols=preds]
+
+# Count total number of phonemes in each word
+d$TotalPhon <- rowSums(d[,6:49])
+
+# Generating the total sound score from Sidhu et al (2026) Exp 1 analysis 
+d$TotalSoundScore <- (d$i*0.01707945) + (d$ɪ*0.01764314) + (d$u*-0.04946283) + (d$ʌ*0.05863765) + (d$ɔ*-0.02766362) + (d$k*0.15008612) + (d$l*-0.10463245) + (d$m*-0.09955079) + (d$n*-0.08731275) + (d$p*0.03528270) + (d$t*0.01273982) + (d$ʃ*0.04798239) + (d$oʊ*-0.05648519) + (d$ʧ*0.23973549)
+
+# Calculate average sound score 
+d$AverageSoundScore <- d$TotalSoundScore/d$TotalPhon
+
+# z-score emotion ratings (Warriner) and sound scores 
+d$zSound <- scale(d$AverageSoundScore)
+d$zMeaning <- scale(d$Arousal_Warr)
+d$zValence <- scale(d$Valence_Warr)
+d$zValenceEx <- scale(d$Valence_Extremity_Warr)
+```
+
+```{r}
+# select relevant vars 
+word_list <- d[, c(1,50:60, 63:66)]
+
+# Thresholds for emotion meanings, based on Sidhu (2026)
+sound.cut = 1.25
+meaning.cut = 1.25
+
+# Calm Meaning + Calm Sound (less than -1.25) 
+word_list[zMeaning < -meaning.cut & zSound < -sound.cut, Type := "CMCS"]
+
+# Calm Meaning + Exciting Sound 
+word_list[zMeaning < -meaning.cut & zSound > sound.cut, Type := "CMES"]
+
+# Calm Meaning + Neutral Sound 
+word_list[zMeaning < -meaning.cut & zSound <= .25 & zSound >=-.25, Type:= "CMNS"]
+
+# Exciting Meaning + Exciting Sound 
+word_list[zMeaning > meaning.cut & zSound > sound.cut, Type := "EMES"]
+
+#Exciting Meaning + Calm Sound
+word_list[zMeaning > meaning.cut & zSound < -sound.cut, Type := "EMCS"]
+
+# Exciting Meaning + Neutral Sound 
+word_list[zMeaning > meaning.cut & zSound <= .25 & zSound >=-.25, Type:= "EMNS"]
+```
+
+```{r}
+# Check
+
+# Derived Congruency score from calculated zSound and zMeaning 
+word_list[, Iconicity := zSound*zMeaning]
+
+# Make column for Congruency 
+word_list[Type == "CMCS" | Type == "EMES", Congruency := "Congruent"]
+word_list[Type == "CMES" | Type == "EMCS", Congruency := "Incongruent"]
+word_list[Type == "CMNS" | Type == "EMNS", Congruency := "Neutral"]
+
+#Check average for Congruent vs Neutral groups 
+word_list[, .(.N, mean(Iconicity), sd(Iconicity)), by = Congruency]
+```
+
+Congruent words: *N* = 308, mean_iconicity = 3.10, SD_iconicity = 1.27
+Neutral words: *N* = 557, mean_iconicity = 0.01, SD_iconicity = 0.28
+Incongruent words: *N* = 221, mean_iconicity = -2.79, SD_iconicity = 0.97
+
+Remove non-sorted rows 
+```{r}
+word_list_select <- word_list[Congruency == "Congruent" | Congruency == "Incongruent" | Congruency == "Neutral"]
+word_list_select$Congruency <- as.factor(word_list_select$Congruency)
+
+## QUESTION - DO I NEED TO SCALE THE CONTINUOUS VARIABLES ?????
+```
+
+Select relevant columns from sidhu dataset
+```{r}
+# Select relevant columns from sidhu data frame
+sidhu_list <- word_list_select %>% 
+  select(Word, Type, Valence_Extremity_Warr, Arousal_Warr, Iconicity)
+```
+
+Join Lancaster and Sidhu datasets 
+```{r}
+df <- reduce(list(sidhu_list, lanc), inner_join, by = "Word")
+nrow(df)
+```
+
+
+Divy up the Types of words (EMES, CMCS, EMNS, CMNS)
+```{r}
+emes <- df %>% 
+  filter(Type == "EMES") %>%
+  select(-Word, -Type, -Valence_Extremity_Warr, -Arousal_Warr)
+cmcs <- df %>%
+  filter(Type == "CMCS") %>%
+  select(-Word, -Type, -Valence_Extremity_Warr, -Arousal_Warr)
+
+emns <- df %>%
+  filter(Type == "EMNS") %>%
+  select(-Word, -Type, -Valence_Extremity_Warr, -Arousal_Warr)
+cmns <- df %>%
+  filter(Type == "CMNS") %>%
+  select(-Word, -Type, -Valence_Extremity_Warr, -Arousal_Warr)
+
+```
+
+Match the row numbers
+```{r}
+n_match <- min(nrow(emes), nrow(cmcs), nrow(emns), nrow(cmns))
+# 120 rows 
+
+# Arrange by desc Iconicity - get top 120 rows from each group 
+emes <- emes %>% 
+  arrange(desc(Iconicity)) %>%
+  slice_head(n=n_match) %>%
+  select(-Iconicity)
+
+emns <- emns %>% 
+  arrange(desc(Iconicity)) %>%
+  slice_head(n=n_match) %>%
+  select(-Iconicity)
+
+cmcs <- cmcs %>% 
+  arrange(desc(Iconicity)) %>%
+  slice_head(n=n_match) %>%
+  select(-Iconicity)
+
+cmns <- cmns %>% 
+  arrange(desc(Iconicity)) %>%
+  slice_head(n=n_match) %>%
+  select(-Iconicity)
+```
+
+```{r}
+net_emes <- estimateNetwork(emes,
+  default = "EBICglasso", 
+  corMethod = "cor_auto",
+  tuning = 0.5)
+
+net_cmcs <- estimateNetwork(cmcs,
+  default = "EBICglasso", 
+  corMethod = "cor_auto",
+  tuning = 0.5)
+
+net_emns <- estimateNetwork(emns,
+  default = "EBICglasso", 
+  corMethod = "cor_auto",
+  tuning = 0.5)
+
+net_cmns <- estimateNetwork(cmns,
+  default = "EBICglasso", 
+  corMethod = "cor_auto",
+  tuning = 0.5)
+plot(net_emes, layout="circle", label.scale = FALSE, title = "EMES Network")
+plot(net_cmcs, layout="circle", label.scale = FALSE, title = "CMCS Network")
+plot(net_emns, layout="circle", label.scale = FALSE, title = "EMNS Network")
+plot(net_cmns, layout="circle", label.scale = FALSE, title = "CMNS Network")
+
+```
+
