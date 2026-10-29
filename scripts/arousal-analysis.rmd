@@ -187,6 +187,7 @@ cmns <- cmns %>%
   select(-Iconicity)
 ```
 
+Network visuals for each group
 ```{r}
 net_emes <- estimateNetwork(emes,
   default = "EBICglasso", 
@@ -207,6 +208,7 @@ net_cmns <- estimateNetwork(cmns,
   default = "EBICglasso", 
   corMethod = "cor_auto",
   tuning = 0.5)
+
 plot(net_emes, layout="circle", label.scale = FALSE, title = "EMES Network")
 plot(net_cmcs, layout="circle", label.scale = FALSE, title = "CMCS Network")
 plot(net_emns, layout="circle", label.scale = FALSE, title = "EMNS Network")
@@ -214,3 +216,49 @@ plot(net_cmns, layout="circle", label.scale = FALSE, title = "CMNS Network")
 
 ```
 
+Partial Correlation Matrices for each group
+```{r}
+nets <- list(EMES = net_emes, EMNS = net_emns, CMCS = net_cmcs, CMNS = net_cmns)
+dats <- list(EMES = emes, EMNS = emns, CMCS = cmcs, CMNS = cmns)
+
+plot_pcor <- function(n) {
+  pcor <- nets[[n]]$graph
+  colnames(pcor) <- rownames(pcor) <- colnames(dats[[n]])
+
+  corrplot(
+    pcor, 
+    method = "color",
+    type="upper",
+    diag = TRUE,
+    tl.srt = 45,
+    tl.col = "black",
+    title = paste0(n, ": Partial Correlations"),
+    mar = c(0,0,2,0),
+    addCoef.col = "black", 
+    number.cex = 0.6, 
+    number.digits = 2       
+  )
+  invisible(pcor)
+}
+mtx <- lapply(names(nets), plot_pcor)
+names(mtx) <- names(nets)
+
+
+```
+
+
+```{r}
+# EMES vs EMNS
+centralityPlot(nets[1:2], include = c("Strength"), decreasing = FALSE, orderBy = "Strength")
+
+# CMCS vs CMNS
+centralityPlot(nets[3:4], include = c("Strength"), decreasing = FALSE, orderBy = "Strength")
+
+# EMES vs CMCS
+centralityPlot(c(nets[3],nets[1]), include = c("Strength"), decreasing = FALSE, orderBy = "Strength")
+
+# EMNS vs CMNS
+centralityPlot(c(nets[2],nets[4]), include = c("Strength"), decreasing = FALSE, orderBy = "Strength")
+
+
+```
