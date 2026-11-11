@@ -74,7 +74,7 @@ icon <- icon %>% select(word, rating, rating_sd)  %>% #make sure if rating is ri
 
 Join to full dataset 
 ```{r}
-df <- reduce(list(AOA, lanc, spec, emot, icon, freq), inner_join, by = "Word")
+df <- reduce(list(AOA, lanc, emot, icon, freq), inner_join, by = "Word")
 ```
 
 See how many words overlapped
@@ -109,8 +109,10 @@ cut_low <- tertiles[1]
 cut_high <- tertiles[2]
 
 # Split into high-iconicity and low-iconicity word groups 
-high_iconic <- df %>% filter(Iconicity >= cut_high)
-low_iconic <- df %>% filter(Iconicity <= cut_low)
+high_iconic <- df %>% filter(Iconicity >= cut_high) %>%
+  filter(Iconicity_SD <= 1.5)
+low_iconic <- df %>% filter(Iconicity <= cut_low) %>%
+  filter(Iconicity_SD <= 1.5)
 ```
 
 Check group size 
@@ -181,7 +183,7 @@ Univariate group comparison of semantic dimensions between high iconic vs low ic
 ```{r}
 # t-tests to compare ratings between high-iconic vs low-iconic 
 # list of variables
-vars_test <- c("AOA", "Auditory", "Gustatory","Haptic", "Interoceptive", "Olfactory", "Visual", "Foot_leg", "Hand_arm", "Head", "Mouth", "Torso", "Specificity", "Arousal", "Valence")
+vars_test <- c("AOA", "Auditory", "Gustatory","Haptic", "Interoceptive", "Olfactory", "Visual", "Foot_leg", "Hand_arm", "Head", "Mouth", "Torso", "Arousal", "Valence")
 
 results <- map_dfr(vars_test, function(var) {
   formula <- as.formula(paste(var,"~ Iconic"))
@@ -320,8 +322,8 @@ net_low <- estimateNetwork(low_iconic,
 
 L <- averageLayout(net_low,net_high)
 
-plot(net_low, layout=L,label.scale = FALSE, title = "Low Iconicity Network")
-plot(net_high, layout = L,label.scale = FALSE, title = "High Iconicity Network")
+plot(net_low, layout="circle",label.scale = FALSE, title = "Low Iconicity Network")
+plot(net_high, layout = "circle",label.scale = FALSE, title = "High Iconicity Network")
 
 ```
 
@@ -415,5 +417,10 @@ nct_result <- NCT(high_iconic, low_iconic, it = 10000,
                    test.edges = TRUE, edges = "all", 
                    test.centrality = TRUE, centrality = "strength",
                    p.adjust.methods = "BH")
+
 ```
 
+## More comparisons (following Diveica et al., 2025)
+```{r}
+
+```
