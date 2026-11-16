@@ -4,7 +4,7 @@ author: "ailani"
 date: "9/7/26"
 output: html_document
 ---
-# The Multisensory Nature of Iconic Words: A Network Analysis
+# The Multisensory Networks of Iconic Language
 
 Load packages
 ```{r, warning = FALSE, message = FALSE}
@@ -36,45 +36,33 @@ Load datasets
 setwd('/Users/ailani/Projects/iconic-network-analysis/data/')
 
 AOA <- read_csv('kuperman_2012_AOA.csv')
-freq <- read_csv('brysbaert_2012_SUBTLEX_POS.csv')
 lanc <- read_csv('Lancaster_sensorimotor_norms_for_39707_words.csv')
-spec <- read_csv('muraki_2026_specificity.csv')
 emot <- read_csv('warriner_2013_affective_norms.csv')
 icon <- read_csv("winter_2024_iconicity_ratings_cleaned.csv")
-
 ```
-
 
 Select relevant columns from each dataset
 ```{r}
 AOA <- AOA %>% select(Word, Rating.Mean) %>% 
   rename(AOA = Rating.Mean)
 
-freq <- freq %>% 
-  rename(Frequency = FREQcount) %>% 
-  select(Word, Frequency)
-
 lanc <- lanc %>% select(Word, Auditory.mean:Torso.mean) %>% 
   mutate(Word = tolower(Word)) %>%
   rename_with(~ str_remove(.x, "\\.mean"), Auditory.mean:Torso.mean)
 
-spec <- spec %>% select(Word, Value) %>%  
-  rename(Specificity = Value) #make sure if Value is the right column to use
-
 emot <- emot %>% select(Word, A.Mean.Sum, V.Mean.Sum) %>% 
-  mutate(Valence = abs(V.Mean.Sum - 5)) %>% # Get the valence extremity value
+  mutate(Valence_Extremity = abs(V.Mean.Sum - 5)) %>% # Get the valence extremity value
+  mutate(Valence = V.Mean.Sum) %>%  # Including normal valence scores as well
   rename(Arousal = A.Mean.Sum) %>% 
-  select(Word, Arousal, Valence)
-
+  select(Word, Arousal, Valence, Valence_Extremity)
 
 icon <- icon %>% select(word, rating, rating_sd)  %>% #make sure if rating is right column 
   rename(Word = word, Iconicity = rating, Iconicity_SD = rating_sd) 
 ```
 
-
-Join to full dataset 
+Join each dimension ratings to full dataset 
 ```{r}
-df <- reduce(list(AOA, lanc, emot, icon, freq), inner_join, by = "Word")
+df <- reduce(list(AOA, lanc, emot, icon), inner_join, by = "Word")
 ```
 
 See how many words overlapped
@@ -84,44 +72,28 @@ nrow(df)
 
 There are `r nrow(df)` overlapping words across all the data sets representing the properties of interest.  
 
-Log-transform frequency data
-```{r}
-# First make sure NAs in Frequency are 0 
-df <- mutate(df, 
-  Frequency = ifelse(is.na(Frequency), 0, Frequency))
-
-df <- mutate(df, 
-      LogFreq = log10(Frequency + 1))
-```
-
-Standardize variables (Z-scores)
-`{r}
-z_score <- function(x) (x - mean(x, na.rm = TRUE)) / sd(x)
-df <- df %>% mutate(across(c(AOA, Auditory:Torso, Specificity, Arousal, Valence, LogFreq), z_score, .names = "{.col}_z"))
-`
-
-
-Split into two data frames: one with high iconicity words and another with low iconicity (more arbitrary) words. For lack of conventions in iconicity literature, use tertile split.
+### Creating Iconic and Non-iconic Word Groups 
+Split into two data frames: one with high iconicity words and another with low iconicity (more arbitrary) words. For lack of conventions in iconicity literature, use tertile split. I will also filter to include only iconic rating SDs that are equal to or lower than 1.5, following De Zubicaray & Hinojosa (2026), to make sure iconic ratings have reasonable inter-rater agreement (Pollock, 2018). 
 ```{r}
 # Find the tertile cutoffs on iconicity ratings 
 tertiles <- quantile(df$Iconicity, probs= c(1/3, 2/3), na.rm=TRUE)
 cut_low <- tertiles[1]
 cut_high <- tertiles[2]
 
-# Split into high-iconicity and low-iconicity word groups 
+# Split into high-iconicity and low-iconicity word groups, filtering for lower SD in iconicity ratings
 high_iconic <- df %>% filter(Iconicity >= cut_high) %>%
   filter(Iconicity_SD <= 1.5)
 low_iconic <- df %>% filter(Iconicity <= cut_low) %>%
   filter(Iconicity_SD <= 1.5)
 ```
 
-Check group size 
+Check size of the two groups:
 ```{r}
 nrow(high_iconic)
 nrow(low_iconic)
 ```
 
-There are more high_iconic words (`{r} nrow(high_iconic)`) than low_iconic (`{r} nrow(low_iconic)`), so match to low_iconic 
+There are fewer high_iconic words (`{r} nrow(high_iconic)`) than low_iconic (`{r} nrow(low_iconic)`), so match to high_iconic 
 ```{r}
 n_match <- min(nrow(high_iconic), nrow(low_iconic))
 
@@ -154,15 +126,16 @@ low_iconic %>% summarise(mean_sd = mean(Iconicity_SD, na.rm=TRUE))
 df %>% summarise(mean_SD_full = mean(Iconicity_SD, na.rm=TRUE))
 ```
 
-Now, both high iconic group and low iconic group have same number of words: 2227.
+Now, both high iconic group and low iconic group have same number of words: `{r} nrow(low_iconic)`.
 
-The mean iconicity of the high_iconic set is 4.75, SD = 0.52, and the range is 4.10-6.91. 
+The mean iconicity of the high_iconic set is 5.20, _SD_ = 0.66, and the range is 4.17-6.92. 
 
-The mean iconicity of the low_iconic set is 2.89, SD = 0.36, and the range is 1.30 - 3.89.
+The mean iconicity of the low_iconic set is 2.59, _SD_ = 0.41, and the range is 1.30 - 3.25.
 
-Mean inter-rater SD was 1.78 (High) and 1.74 (Low). These are both slightly lower than full-sample mean SD of 1.81. 
+Mean inter-rater SD was 1.22 for high_iconic and 1.28 for low_iconic. The full dataset mean SD of 1.82. 
 
 ```{r}
+# Checking what the SD of the middle of the dataset (middle iconic ratings) looks like
 t.test(df$Iconicity_SD, mu = 1.775)  # 1.775 = combined High/Low mean, adjust as needed
 
 middle_icon_words <- df %>% 
@@ -171,88 +144,113 @@ middle_icon_words <- df %>%
 mean(middle_icon_words$Iconicity_SD, na.rm = TRUE)
 ```
 
-
 Combine the split data sets into one (removing the middle iconicity words)
 ```{r}
+#Remove Iconicity ratings from high_iconic and low_iconic
+high_iconic <- high_iconic %>% select(-Iconicity, -Iconicity_SD)
+low_iconic <- low_iconic %>% select(-Iconicity, -Iconicity_SD)
+
 data_both <- bind_rows(high_iconic, low_iconic) %>%
   select(Word, Iconic, everything()) %>%
   mutate(Iconic = factor(Iconic, levels = c("Iconic", "Non-iconic")))
 ```
 
-Univariate group comparison of semantic dimensions between high iconic vs low iconic words (`broom` package)
+Univariate group comparison of semantic dimensions between high iconic vs low iconic words. Adjust for multiple comparisons with Bonferroni correction (following Diveica et al., 2025). 
 ```{r}
 # t-tests to compare ratings between high-iconic vs low-iconic 
-# list of variables
-vars_test <- c("AOA", "Auditory", "Gustatory","Haptic", "Interoceptive", "Olfactory", "Visual", "Foot_leg", "Hand_arm", "Head", "Mouth", "Torso", "Arousal", "Valence")
+stat_test <- data_both %>% 
+  tidyr::pivot_longer(3:ncol(data_both), names_to = "Measure", values_to = "Rating") %>% 
+  dplyr::group_by(Measure) %>%
+  rstatix::t_test(Rating ~ Iconic) %>%
+  rstatix::adjust_pvalue(p.col = "p", method = "bonferroni") %>%
+  rstatix::add_significance(p.col = "p.adj") %>%
+  dplyr::select(Measure, statistic, p, p.adj, p.adj.signif) %>%
+  dplyr::ungroup()
 
-results <- map_dfr(vars_test, function(var) {
-  formula <- as.formula(paste(var,"~ Iconic"))
-  t_result <- t.test(formula, data=data_both)
+# Add effect sizes with Cohen's d 
+effect_sizes <- data_both %>%
+  tidyr::pivot_longer(3:ncol(data_both), names_to = "Measure", values_to = "Rating") %>% 
+  dplyr::group_by(Measure) %>%
+  rstatix::cohens_d(Rating ~ Iconic) %>%
+  as.data.frame() %>%
+  dplyr::select(effsize, magnitude) %>%
+  dplyr::ungroup()
 
-  tidy(t_result) %>%
-    mutate(Variable = var) %>% 
-    select(Variable, estimate, statistic, p.value, conf.low, conf.high)
-})
 ```
 
-Adjust for multiple comparisons with Bonferroni correction (following Diveica et al., 2025)
+Combining descriptive statistics with effect sizes into a results table. 
 ```{r}
-results <- results %>% 
-  mutate(p_adj = p.adjust(p.value, method="bonferroni")) %>%
-  arrange(p_adj)
+descript <- data_both %>% 
+  tidyr::pivot_longer(3:ncol(data_both), names_to = "Measure", values_to = "Rating")%>%
+  dplyr::group_by(Measure, Iconic) %>%
+  dplyr::summarise(Mean=mean(Rating), SD = sd(Rating), Skew= psych::skew(Rating), Kurtosis = psych::kurtosi(Rating)) %>%
+  mutate('Mean Score (SD)' = paste0(sprintf("%.2f", Mean), " (", sprintf("%.2f", SD), ")")) %>%
+  select(-Mean, -SD) %>%
+  tidyr::pivot_wider(names_from = Iconic, values_from = c('Mean Score (SD)', Skew, Kurtosis))
 
-print(results)
-```
+#generate results table 
+result_table <- dplyr::bind_cols(descript %>% 
+  select(Measure, starts_with("Mean")), 
+  stat_test %>% dplyr::select(-Measure), effect_sizes) %>%
+  dplyr::arrange(dplyr::desc(effsize))
 
-Calculate the effect sizes (Cohen's d) 
-```{r}
-effect_sizes <- map_dfr(vars_test, function(var){
-  formula <- as.formula(paste(var, "~ Iconic"))
-  d <- cohens_d(formula, data=data_both)
-  tibble(Variable = var, effsize= d$effsize, magnitude = d$magnitude)
-})
-
-results <- results %>%
-  left_join(effect_sizes, by = "Variable")
-
-print(results)
 ```
 
 Visualize the differences with violin plots
-```{r}
-# Reshape data to long format
-both_long <- data_both %>% 
-  select(Iconic, all_of(vars_test)) %>%
-  pivot_longer(-Iconic, names_to = "Variable", values_to = "Value")
+``` {r}
+# Build plot of dimension-based ratings for high-iconic and low-iconic words, annotating by effect size 
 
-# Build plot 
-ggplot(both_long, 
-    aes(x = Iconic, y = Value, fill= Iconic)) +
-    geom_violin(alpha=0.5) +
-    geom_boxplot(width=0.15, outlier.shape = NA) +
-    facet_wrap(~ Variable, scales= "free_y") +
-    theme_minimal()
+# Long form of data 
+dat <- data_both %>% 
+  tidyr::pivot_longer(3:ncol(data_both), names_to = "Measure", values_to= "Rating")
+dat <- left_join(dat, result_table %>% 
+  dplyr::select(Measure, effsize), by = "Measure") %>%
+  dplyr::mutate(Measure = factor(Measure, levels=result_table$Measure), 
+  Iconic = factor(Iconic, levels = c("Iconic", "Non-iconic")))
 
-
+# Violin Plot Formatting
+fig1 <- ggplot2::ggplot(dat, 
+    aes(x = Iconic, y = Rating, split=Iconic, fill= Iconic)) +
+    ggplot2::geom_violin(position="identity", alpha=0.5, aes(color = Iconic)) +
+    ggplot2::stat_summary(
+      fun.data = "mean_cl_normal", fun.args = list(conf.int = .99),
+      geom = "errorbar", linewidth = 1,
+      width = .2
+    ) + 
+    ggplot2::geom_text(aes(label = paste0("d = ", format(effsize, digits = 2)), x = 1.5, y = Inf),
+      vjust = 1.5, hjust = 0.5, size = 3, color = "black", inherit.aes = FALSE
+    ) +
+    ggplot2::stat_summary(fun = "mean", geom = "point") +
+    ggplot2::stat_summary(fun = "mean", geom = "line", aes(group = 1), linetype = "dashed") +
+    ggplot2::facet_wrap(vars(Measure), ncol = 4, scales = "free_y", 
+      labeller = labeller(Measure = c("Iconicity_val" = "Iconicity"))) + 
+    ggplot2::scale_fill_manual(values = c("#3160d7", "#ed968c")) +
+    ggplot2::scale_colour_manual(values = c("#3160d7", "#ed968c")) +
+    ggplot2::labs(x="", y="Score") + 
+    ggplot2::theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.line.x = element_blank()) +
+    ggplot2::scale_y_continuous(breaks = scales::pretty_breaks(n = 3))
 ```
 
+```{r descriptives viz, include = TRUE}
+fig1
+papaja::apa_table(result_table)
+```
 
 Correlation martix for full data set 
 ``` {r}
 library(dplyr)
 cor_data <- df %>%
-  select(all_of(vars_test), Iconicity)
+  select(2:(ncol(df)-1))
 
 cor_matrix <- cor(cor_data, use="pairwise.complete.obs", method = "pearson")
-print(round(cor_matrix,2))
 
 # get p-values for correlations 
 library(Hmisc)
 
 rcorr_result <- rcorr(as.matrix(cor_data), type = "pearson")
 
-rcorr_result$r  # correlation coefficients
-rcorr_result$P  # p-values
+#rcorr_result$r  # correlation coefficients
+#rcorr_result$P  # p-values
 
 # Visualize
 library(corrplot)
@@ -266,17 +264,17 @@ corrplot(cor_matrix,
          addCoef.col = "black",
          number.cex = 0.6,
          tl.col = "black",
-         title = "Full",
+         title = "Full (Iconic and Non-iconic groups combined)",
          tl.srt = 45,
          diag = FALSE)
 ```
 
 Separate correlation matrices for high vs low iconic groups 
-``` {r} 
+``` {r, include = FALSE} 
 cor_hi_data <- high_iconic %>%
-  select(all_of(vars_test), Iconicity)
+  select(2:(ncol(df)-2))
 cor_low_data <- low_iconic %>%
-  select(all_of(vars_test), Iconicity)
+  select(2:(ncol(df)-2))
 
 cor_high <- cor(cor_hi_data, use = "pairwise.complete.obs")
 cor_low  <- cor(cor_low_data,  use = "pairwise.complete.obs")
@@ -294,22 +292,22 @@ corrplot(cor_low, method = "color", type = "upper", addCoef.col = "black",
 
 ## Estimate the partial correlation networks. 
 
-Select rows that will be used as nodes (remove Word, Iconic, Iconicity, Iconicity_SD, Frequency, and LogFrequency) from high_iconic and low_iconic data frames. 
-```{r}
+Select rows that will be used as nodes (remove Word, Iconic) from high_iconic and low_iconic data frames. 
+```{r prepare data}
 nrow(high_iconic) == nrow(low_iconic)
 
 high_iconic <- high_iconic %>% 
-  select(-Word, -Iconic, -Iconicity, -Iconicity_SD, -Frequency, -LogFreq)
+  select(-Word, -Iconic)
 
 low_iconic <- low_iconic %>% 
-  select(-Word, -Iconic, -Iconicity, -Iconicity_SD, -Frequency, -LogFreq)
+  select(-Word, -Iconic)
 
 # variable to store label names of nodes
 names <- as.list(names(low_iconic))
 ```
 
 Estimate network for each group, using `bootnet` package. 
-```{r}
+```{r partial correlation networks, include = FALSE}
 net_high <- estimateNetwork(high_iconic,
   default = "EBICglasso", 
   corMethod = "cor_auto",
@@ -322,13 +320,14 @@ net_low <- estimateNetwork(low_iconic,
 
 L <- averageLayout(net_low,net_high)
 
+# Plot the networks for both groups
 plot(net_low, layout="circle",label.scale = FALSE, title = "Low Iconicity Network")
 plot(net_high, layout = "circle",label.scale = FALSE, title = "High Iconicity Network")
 
 ```
 
-Create partial correlation plot
-```{r}
+Create partial correlation plots
+```{r partial correlation matrices, include = FALSE}
 pcor_high <- net_high$graph
 pcor_low <- net_low$graph
 
@@ -337,28 +336,36 @@ colnames(pcor_high) <- rownames(pcor_high) <- colnames(high_iconic)
 colnames(pcor_low)  <- rownames(pcor_low)  <- colnames(low_iconic)
 
 
-matrix1 <- corrplot(
+matrix1 <- corrplot::corrplot(
   pcor_high,
   method = "color",
   type="upper",
+  addCoef.col = "black", 
+  tl.col = "black", 
+  number.cex = 0.5, 
+  tl.srt = 45, 
   diag = FALSE,
-  tl.srt = 45,
-  tl.col = "black",
-  title = "High Iconicity: Partial Correlations",
-  mar = c(0,0,2,0)
+  mar = c(0,0,2,0),
+  title = "High Iconicity: Partial Correlations"
 )
 
-matrix2 <- corrplot(
+matrix2 <- corrplot::corrplot(
   pcor_low,
   method = "color",
   type="upper",
+  addCoef.col = "black", 
+  tl.col = "black", 
+  number.cex = 0.5, 
+  tl.srt = 45, 
   diag = FALSE,
-  tl.srt = 45,
-  tl.col = "black",
-  title = "Low Iconicity: Partial Correlations",
-  mar = c(0,0,2,0)
+  mar = c(0,0,2,0),
+  title = "Low Iconicity: Partial Correlations"
 )
+```
 
+### Combined Partial Correlation Plots
+Upper triangle is the partial correlations of high_iconic group, while the lower triangle is the pcorrs of the low_iconic group. 
+```{r combined pcorr plot, include = TRUE}
 # Combine the partial correlation plots into one [COME BACK LATER]
 combined_matrix <- pcor_high # Use high_iconic as base 
 combined_matrix[upper.tri(combined_matrix)] <- pcor_low[upper.tri(pcor_low)] #fill upper with low_iconic corrplot 
@@ -370,57 +377,90 @@ pc_corrplot <- ggcorrplot(
   show.diag = TRUE,
   outline.col = "white",
   lab = TRUE, # display correlation coef 
+  lab_size = 2, 
+  tl.cex = 8, # size of text labels on axes
+  tl.col = "black", 
   hc.order = FALSE
 )
 pc_corrplot
 ```
 
+### High Iconicity Network
 Summary of network for high_iconic 
-```{r}
-summary(pcor_high)
+```{r high iconicity network, include = TRUE}
+summary(net_high)
+plot(net_high, layout = "circle", label.scale = FALSE, title = "High Iconicity Network")
+corrplot::corrplot(
+  pcor_high,
+  method = "color",
+  type="upper",
+  addCoef.col = "black", 
+  tl.col = "black", 
+  number.cex = 0.5, 
+  tl.srt = 45, 
+  diag = FALSE,
+  mar = c(0,0,2,0),
+  title = "High Iconicity: Partial Correlations"
+) 
 ```
 
+### Low Iconicity Network
 Summary of network for low_iconic
-```{r}
-summary(pcor_low)
+```{r low iconicity network, include = TRUE}
+summary(net_low)
+plot(net_low, layout = "circle",label.scale = FALSE, title = "Low Iconicity Network")
+corrplot::corrplot(
+  pcor_low,
+  method = "color",
+  type="upper",
+  addCoef.col = "black", 
+  tl.col = "black", 
+  number.cex = 0.5, 
+  tl.srt = 45, 
+  diag = FALSE,
+  mar = c(0,0,2,0),
+  title = "Low Iconicity: Partial Correlations"
+)
 ```
 
 Create centrality figure 
-```{r}
-centralityPlot(list(High = net_high, Low = net_low), include = c("Strength"), decreasing = FALSE, orderBy = "Strength")
+```{r centrality plot, include = TRUE}
+centralityPlot(list(High = net_high, Low = net_low), include = c("Strength"), decreasing = FALSE, orderBy = "Strength", scale="raw", theme_bw = TRUE)
 
-centrality_table <- centralityTable(net_high, net_low, standardized = TRUE)
-centrality_table %>% 
+```
+
+Centrality Table
+```{r centrality table, include = FALSE}
+centrality_table_raw <- centralityTable(net_high, net_low, standardized = FALSE)
+centrality_table_z <- centralityTable(net_high, net_low, standardized = TRUE)
+
+centrality_table_z %>% 
   filter(measure == "Strength") %>% 
   arrange(desc(value))
 ```
 
 Bootstrap Stability
-```{r}
+```{r bootstrap stability, include = FALSE}
 #| echo = FALSE
-boot_high <- bootnet(net_high, nBoots = 1000, type = "nonparametric")
-boot_low  <- bootnet(net_low,  nBoots = 1000, type = "nonparametric")
+#boot_high <- bootnet(net_high, nBoots = 1000, type = "nonparametric")
+#boot_low  <- bootnet(net_low,  nBoots = 1000, type = "nonparametric")
 
-boot_high
-boot_low
+#boot_high
+#boot_low
 ``` 
 
-```{r}
+```{r bootstrap,  include = FALSE}
 # node strength stability
-case_high <- bootnet(net_high, nBoots = 1000, type = "case", statistics = "strength")
-case_low  <- bootnet(net_low,  nBoots = 1000, type = "case", statistics = "strength")
+#case_high <- bootnet(net_high, nBoots = 1000, type = "case", statistics = "strength")
+#case_low  <- bootnet(net_low,  nBoots = 1000, type = "case", statistics = "strength")
 ```
 
 ```{r}
 # compare networks directly
-nct_result <- NCT(high_iconic, low_iconic, it = 10000, 
-                   test.edges = TRUE, edges = "all", 
-                   test.centrality = TRUE, centrality = "strength",
-                   p.adjust.methods = "BH")
+#nct_result <- NCT(high_iconic, low_iconic, it = 10000, 
+#                   test.edges = TRUE, edges = "all", 
+#                   test.centrality = TRUE, centrality = "strength",
+#                  p.adjust.methods = "BH")
 
 ```
 
-## More comparisons (following Diveica et al., 2025)
-```{r}
-
-```
