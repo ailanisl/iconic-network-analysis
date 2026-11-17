@@ -59,6 +59,8 @@ emot <- emot %>% select(Word, A.Mean.Sum, V.Mean.Sum) %>%
 icon <- icon %>% select(word, rating, rating_sd)  %>% #make sure if rating is right column 
   rename(Word = word, Iconicity = rating, Iconicity_SD = rating_sd) 
 ```
+I included both Valence and Valence Extremeity. 
+
 
 Join each dimension ratings to full dataset 
 ```{r}
@@ -73,7 +75,7 @@ nrow(df)
 There are `r nrow(df)` overlapping words across all the data sets representing the properties of interest.  
 
 ### Creating Iconic and Non-iconic Word Groups 
-Split into two data frames: one with high iconicity words and another with low iconicity (more arbitrary) words. For lack of conventions in iconicity literature, use tertile split. I will also filter to include only iconic rating SDs that are equal to or lower than 1.5, following De Zubicaray & Hinojosa (2026), to make sure iconic ratings have reasonable inter-rater agreement (Pollock, 2018). 
+Split into two data frames: one with high iconicity words (`high_iconic`) and another with low iconicity - more arbitrary - words (`low_iconic`). For lack of conventions in iconicity literature, use tertile split. I will also filter to include only iconic rating SDs that are equal to or lower than 1.5, following De Zubicaray & Hinojosa (2026), to make sure iconic ratings have reasonable inter-rater agreement (Pollock, 2018). 
 ```{r}
 # Find the tertile cutoffs on iconicity ratings 
 tertiles <- quantile(df$Iconicity, probs= c(1/3, 2/3), na.rm=TRUE)
@@ -93,17 +95,17 @@ nrow(high_iconic)
 nrow(low_iconic)
 ```
 
-There are fewer high_iconic words (`{r} nrow(high_iconic)`) than low_iconic (`{r} nrow(low_iconic)`), so match to high_iconic 
+There are fewer `high_iconic` words (_n_ = `{r} nrow(high_iconic)`) than `low_iconic` (_n_ = `{r} nrow(low_iconic)`), so match to `high_iconic`:
 ```{r}
 n_match <- min(nrow(high_iconic), nrow(low_iconic))
 
 high_iconic <- high_iconic %>% 
-  arrange(desc(Iconicity)) %>% 
+  arrange(desc(Iconicity)) %>% #descending order
   slice_head(n=n_match) %>%
   mutate(Iconic = "Iconic")
 
 low_iconic <- low_iconic %>% 
-  arrange(Iconicity) %>% 
+  arrange(Iconicity) %>% #ascending order
   slice_head(n=n_match) %>%
   mutate(Iconic = "Non-iconic")
 ```
@@ -134,6 +136,7 @@ The mean iconicity of the low_iconic set is 2.59, _SD_ = 0.41, and the range is 
 
 Mean inter-rater SD was 1.22 for high_iconic and 1.28 for low_iconic. The full dataset mean SD of 1.82. 
 
+Middle dataset SD for comparison: 
 ```{r}
 # Checking what the SD of the middle of the dataset (middle iconic ratings) looks like
 t.test(df$Iconicity_SD, mu = 1.775)  # 1.775 = combined High/Low mean, adjust as needed
@@ -155,7 +158,8 @@ data_both <- bind_rows(high_iconic, low_iconic) %>%
   mutate(Iconic = factor(Iconic, levels = c("Iconic", "Non-iconic")))
 ```
 
-Univariate group comparison of semantic dimensions between high iconic vs low iconic words. Adjust for multiple comparisons with Bonferroni correction (following Diveica et al., 2025). 
+### Univariate group comparison of semantic dimensions between high iconic vs low iconic words. 
+Adjust for multiple comparisons with Bonferroni correction (following Diveica et al., 2025). 
 ```{r}
 # t-tests to compare ratings between high-iconic vs low-iconic 
 stat_test <- data_both %>% 
@@ -196,7 +200,7 @@ result_table <- dplyr::bind_cols(descript %>%
 
 ```
 
-Visualize the differences with violin plots
+#### Visualize the differences with violin plots
 ``` {r}
 # Build plot of dimension-based ratings for high-iconic and low-iconic words, annotating by effect size 
 
@@ -231,12 +235,20 @@ fig1 <- ggplot2::ggplot(dat,
     ggplot2::scale_y_continuous(breaks = scales::pretty_breaks(n = 3))
 ```
 
+Violin plots of each of the semantic rating distribution for low iconicity and high iconicity words. The formatting reflects the one done in Diveica's 2025 paper: the means and the 99% confidence intervals are illustrated, the dashed lines show the effect direction, and the Cohen's _d_ is written below the semantic dimension name. 
+
 ```{r descriptives viz, include = TRUE}
 fig1
 papaja::apa_table(result_table)
 ```
 
-Correlation martix for full data set 
+Olfactory, Gustatory, Auditory, Mouth dimensions were not significant between high iconicity and low iconicity words. Interoceptive (_p_ = .022, _d_ = .16) and Visual (_p_ = .002, _d_ = 0.20) dimensions had negligible effect sizes. All other dimensions were statistically significant (_p_s < .0003). 
+
+High iconicity words had higher Haptic, Hand/arm, Arousal, Foot/leg, Torso, and Valence Extremity mean ratings than low iconicity words. 
+
+Low iconicity words had higher Head, Valence, and Age of Acquisition mean ratings than high iconicity words. 
+
+### Correlation martix for full data set 
 ``` {r}
 library(dplyr)
 cor_data <- df %>%
@@ -269,8 +281,9 @@ corrplot(cor_matrix,
          diag = FALSE)
 ```
 
-Separate correlation matrices for high vs low iconic groups 
+
 ``` {r, include = FALSE} 
+# Separate correlation matrices for high vs low iconic groups 
 cor_hi_data <- high_iconic %>%
   select(2:(ncol(df)-2))
 cor_low_data <- low_iconic %>%
@@ -292,7 +305,7 @@ corrplot(cor_low, method = "color", type = "upper", addCoef.col = "black",
 
 ## Estimate the partial correlation networks. 
 
-Select rows that will be used as nodes (remove Word, Iconic) from high_iconic and low_iconic data frames. 
+Select rows that will be used as nodes (remove `Word`, `Iconic` columns) from `high_iconic` and `low_iconic` data frames. 
 ```{r prepare data}
 nrow(high_iconic) == nrow(low_iconic)
 
@@ -307,7 +320,8 @@ names <- as.list(names(low_iconic))
 ```
 
 Estimate network for each group, using `bootnet` package. 
-```{r partial correlation networks, include = FALSE}
+```{r partial correlation networks}
+#| output: false
 net_high <- estimateNetwork(high_iconic,
   default = "EBICglasso", 
   corMethod = "cor_auto",
@@ -319,22 +333,27 @@ net_low <- estimateNetwork(low_iconic,
   tuning = 0.5)
 
 L <- averageLayout(net_low,net_high)
+```
+
+```{r side-by-side networks, include=TRUE}
+par(mfrow = c(1, 2))
 
 # Plot the networks for both groups
 plot(net_low, layout="circle",label.scale = FALSE, title = "Low Iconicity Network")
 plot(net_high, layout = "circle",label.scale = FALSE, title = "High Iconicity Network")
-
 ```
 
+
+
 Create partial correlation plots
-```{r partial correlation matrices, include = FALSE}
+```{r partial correlation matrices}
+#| output: false
 pcor_high <- net_high$graph
 pcor_low <- net_low$graph
 
 # add column and row names 
 colnames(pcor_high) <- rownames(pcor_high) <- colnames(high_iconic)
 colnames(pcor_low)  <- rownames(pcor_low)  <- colnames(low_iconic)
-
 
 matrix1 <- corrplot::corrplot(
   pcor_high,
@@ -385,8 +404,8 @@ pc_corrplot <- ggcorrplot(
 pc_corrplot
 ```
 
-### High Iconicity Network
-Summary of network for high_iconic 
+## High Iconicity Network
+Summary of network for `high_iconic`, including network viz and partial correlation matrix 
 ```{r high iconicity network, include = TRUE}
 summary(net_high)
 plot(net_high, layout = "circle", label.scale = FALSE, title = "High Iconicity Network")
@@ -404,8 +423,8 @@ corrplot::corrplot(
 ) 
 ```
 
-### Low Iconicity Network
-Summary of network for low_iconic
+## Low Iconicity Network
+Summary of network for `low_iconic`
 ```{r low iconicity network, include = TRUE}
 summary(net_low)
 plot(net_low, layout = "circle",label.scale = FALSE, title = "Low Iconicity Network")
@@ -423,6 +442,7 @@ corrplot::corrplot(
 )
 ```
 
+## Centrality metrics 
 Create centrality figure 
 ```{r centrality plot, include = TRUE}
 centralityPlot(list(High = net_high, Low = net_low), include = c("Strength"), decreasing = FALSE, orderBy = "Strength", scale="raw", theme_bw = TRUE)
