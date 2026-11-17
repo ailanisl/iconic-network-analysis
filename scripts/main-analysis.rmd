@@ -242,6 +242,7 @@ fig1
 papaja::apa_table(result_table)
 ```
 
+
 Olfactory, Gustatory, Auditory, Mouth dimensions were not significant between high iconicity and low iconicity words. Interoceptive (_p_ = .022, _d_ = .16) and Visual (_p_ = .002, _d_ = 0.20) dimensions had negligible effect sizes. All other dimensions were statistically significant (_p_s < .0003). 
 
 High iconicity words had higher Haptic, Hand/arm, Arousal, Foot/leg, Torso, and Valence Extremity mean ratings than low iconicity words. 
